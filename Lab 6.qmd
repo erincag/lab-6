@@ -7,9 +7,17 @@ embed-resources: true
 ---
 
 ```{r}
-library(readr)
+knitr::opts_chunk$set(message = FALSE)
+```
+
+```{r}
+library(readr) 
 library(dplyr)
-library(ggplot2)
+library(ggplot2) 
+library(tidytext)
+```
+
+```{r}
 transcript <- read_csv("https://raw.githubusercontent.com/USCbiostats/data-science-data/master/00_mtsamples/mtsamples.csv", show_col_types = FALSE)
 transcript <- transcript %>%
   select(description, medical_specialty, transcription)
@@ -31,7 +39,6 @@ There appears to be a combination of actual medical specialties and some other c
 ## Question 2: Tokenize
 
 ```{r}
-library(tidytext)
 words.transcript <- transcript |>
   unnest_tokens(token, transcription)
 
@@ -47,7 +54,81 @@ The most commonly used words in the transcriptions appear to be what are conside
 ## Question 3: Stop Words
 
 ```{r}
+words.transcript <- transcript |>
+  unnest_tokens(token, transcription) |>
+  anti_join(stop_words, by = c("token" = "word"))
 
+words.transcript |>   
+  count(token, sort = TRUE) |>
+  top_n(20, n) |>
+  ggplot(aes(n, token)) +
+  geom_col()
 ```
 
-The `echo: false` option disables the printing of code (only output is displayed).
+Now, we see that the top 20 words have more relation to medical documentation. Patient becomes the most common word once stop words are removed, and other common words include: "procedure", "pain", "incision", and "left." That last word is likely common to identify which side of the body an injury, surgery, or presence of pain might be occurring.
+
+## Question 4: ngrams
+
+```{r}
+bigram.transcript <- transcript |>
+  unnest_ngrams(ngrams, transcription, n = 2)
+
+bigram.transcript |>
+  count(ngrams, sort = TRUE)
+
+trigrams.transcript <- transcript |>
+  unnest_ngrams(ngrams, transcription, n = 3)
+
+trigrams.transcript |>
+  count(ngrams, sort = TRUE)
+```
+
+Because of the many stop words, the bi-gram output does not provide a significant amount of context to what may be happening in these transcripts. They do indicate that much of the transcript provides descriptions of the patient and refers to potential locations of various things. When sorted by tri-grams, there is a little more to the story. Based on these common pairings, it might be assumed the transcripts discuss the state of a patient, the operating room, preparing a patient for something, and providing an overall summary of each case. Some of these phrases may be used in surgical cases which aligns with the finding that Surgery was the most common medical specialty.
+
+## Question 5: Before and After
+
+```{r}
+library(tidyr)
+transcript |>
+  unnest_ngrams(ngrams, transcription, n = 3) |>
+  separate(ngrams, into = c("word1", "word2", "word3")) |>
+  select(word1, word2, word3) |>
+  filter(word2 == "procedure") |>
+  count(word3, sort = TRUE)
+
+transcript |>
+  unnest_ngrams(ngrams, transcription, n = 3) |>
+  separate(ngrams, into = c("word1", "word2", "word3")) |>
+  select(word1, word2, word3) |>
+  filter(word2 == "procedure") |>
+  count(word1, sort = TRUE)
+```
+
+Beyond some very general words, including stop words, many of the words before "procedure" describe the type of procedure (e.g. surgical, foot, eye, knee, etc.) After looking past some of the more common words, it appears that there is a large mix of the types of surgeries that might be performed. No one location./type of surgery seemed to appear significantly more than others. The words following "procedure" appeared to indicate how the procedure went or other details about the procedure.
+
+## Question 6: Words by Specialty
+
+```{r}
+transcript |>
+  unnest_tokens(tokens, transcription) |>
+  anti_join(stop_words, by = c("tokens" = "word")) |>
+  group_by(medical_specialty) |>
+  count(tokens) |>
+  top_n(5, n)
+```
+
+When sorted by specialty, the top words align well with what is commonly done in those categories. Some top words for Allergy are "allergies" and "nasal". Dentistry includes "teeth" and "tooth." Nephrology includes top words like "kidney" and "renal." There are still some common medical words that appear universal between specialties including: pain, patient, history, normal, etc. Grouping by specialty provides a little more insight into what each group might be doing and the cases they may be taking.
+
+## Question 7: Extra
+
+```{r}
+transcript |>
+  unnest_tokens(token, transcription) |>
+  anti_join(stop_words, by = c("token" = "word")) |>
+  group_by(medical_specialty) |>
+  filter(token == "procedure") |>
+  count(token, sort = TRUE)
+  
+```
+
+The word procedure is often used in place of surgery. I wanted to see how often the word procedure was used in each specialty, to help identify which specialties are more or less likely to perform surgeries. Excluding the Surgery group, the top three were Orthopedic, Cardiovascular, and Gastroenterology. It makes sense to me that these would have the most use of the word procedure. Musculoskeletal injuries happen very frequently, so it is no surprise that they would be making notes of many procedures. Heart and stomach problems also seem to be fairly common in the US, so again, I am not surprised they were at the top. Chiropractic and Allergy only used the word a combined 2 times. From my knowledge, these fields commonly prescribe medication or manual therapy, so it is reasonable they would not often be discussing procedures.
