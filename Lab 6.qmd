@@ -6,23 +6,48 @@ editor: visual
 embed-resources: true
 ---
 
-## Quarto
-
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
-
-## Running Code
-
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
-
 ```{r}
-1 + 1
+library(readr)
+library(dplyr)
+library(ggplot2)
+transcript <- read_csv("https://raw.githubusercontent.com/USCbiostats/data-science-data/master/00_mtsamples/mtsamples.csv", show_col_types = FALSE)
+transcript <- transcript %>%
+  select(description, medical_specialty, transcription)
+
+head(transcript)
 ```
 
-You can add options to executable code like this
+## Question 1: What Specialties Do We Have?
 
 ```{r}
-#| echo: false
-2 * 2
+transcript |>
+  count(medical_specialty, sort = TRUE) 
+  # ggplot(aes(n, medical_specialty)) +
+  # geom_col()
+```
+
+There appears to be a combination of actual medical specialties and some other categories that may be more related to admin work (e.g. consult - history, discharge summary, office notes). The largest category is surgery, and it seems to be cited significantly more than any other category. It appears that categories that may require surgery also appear a large number of times (e.g. radiology, orthopedics, gastroenterology).
+
+## Question 2: Tokenize
+
+```{r}
+library(tidytext)
+words.transcript <- transcript |>
+  unnest_tokens(token, transcription)
+
+words.transcript |>   
+  count(token, sort = TRUE) |>
+  top_n(20, n) |>
+  ggplot(aes(n, token)) +
+  geom_col()
+```
+
+The most commonly used words in the transcriptions appear to be what are considered "stop words." This makes sense, as the transcriptions explain the case and would require the use of a lot of articles. Other common words include "patient", "he", and "she". This aligns with the fact that the transcription would be making comments specifically about a patient or staff that were working on the case. While this is not out of the ordinary, it does not provide any meaningful information about the cases themselves. No medical terminology was in the top 20, and only the word patient alludes to the fact that these are medical notes.
+
+## Question 3: Stop Words
+
+```{r}
+
 ```
 
 The `echo: false` option disables the printing of code (only output is displayed).
